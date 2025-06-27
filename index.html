@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Finance Tracker</title>
+  <style>
+* { box-sizing: border-box; }
+body {
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #f9fafc;
+  color: #333;
+  transition: background 0.3s, color 0.3s;
+}
+.dark {
+  background: #121212;
+  color: #f5f5f5;
+}
+.app {
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+  transition: background 0.3s, color 0.3s;
+}
+.dark .app {
+  background: #1f1f1f;
+}
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+.controls {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+select, input, button {
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+}
+select, input {
+  background: #f0f0f0;
+}
+.dark select, .dark input {
+  background: #333;
+  color: white;
+}
+button {
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button:hover {
+  background-color: #0056b3;
+}
+.summary {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.summary-card {
+  flex: 1;
+  padding: 1rem;
+  border-radius: 12px;
+  background: #f5f5f5;
+  text-align: center;
+  transition: background 0.3s;
+}
+.dark .summary-card {
+  background: #2c2c2c;
+}
+.form-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+.form-section input, .form-section select {
+  flex: 1 1 200px;
+}
+.transaction {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f0f0f0;
+  margin-bottom: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+}
+.dark .transaction {
+  background: #333;
+}
+.transaction strong {
+  font-weight: 600;
+}
+.transaction button {
+  background: transparent;
+  border: none;
+  color: #e74c3c;
+  font-size: 1rem;
+  cursor: pointer;
+}
+canvas {
+  margin-top: 2rem;
+}
+</style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>💸 Finance Tracker</h1>
+      <p>Track your income and expenses with style and clarity</p>
+    </div>
+    <div class="controls">
+      <div class="left">
+        <label for="monthFilter">Month:</label>
+        <select id="monthFilter"></select>
+      </div>
+      <div class="right">
+        <button id="exportBtn">📁 Export CSV</button>
+        <button id="darkModeToggle">🌙</button>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="summary-card income">
+        <h3>Income</h3>
+        <p id="totalIncome">$0</p>
+      </div>
+      <div class="summary-card expenses">
+        <h3>Expenses</h3>
+        <p id="totalExpenses">$0</p>
+      </div>
+      <div class="summary-card balance">
+        <h3>Balance</h3>
+        <p id="balance">$0</p>
+      </div>
+    </div>
+    <div class="form-section">
+      <input type="text" id="description" placeholder="Description" />
+      <input type="number" id="amount" placeholder="Amount" />
+      <select id="type">
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+      <button id="addBtn">➕ Add</button>
+    </div>
+    <div class="list-section">
+      <h3>Transactions</h3>
+      <ul id="transactionList"></ul>
+    </div>
+    <canvas id="chart" height="120"></canvas>
+  </div>
+  <script>
+document.addEventListener("DOMContentLoaded", () => {
+  let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+
+  const descriptionInput = document.getElementById('description');
+  const amountInput = document.getElementById('amount');
+  const typeInput = document.getElementById('type');
+  const addBtn = document.getElementById('addBtn');
+  const transactionList = document.getElementById('transactionList');
+  const totalIncome = document.getElementById('totalIncome');
+  const totalExpenses = document.getElementById('totalExpenses');
+  const balance = document.getElementById('balance');
+  const monthFilter = document.getElementById("monthFilter");
+  const exportBtn = document.getElementById("exportBtn");
+  const darkModeToggle = document.getElementById("darkModeToggle");
+
+  let chart;
+  let monthFilterInitialized = false;
+
+  function populateMonthFilter() {
+    if (monthFilterInitialized) return;
+    monthFilterInitialized = true;
+    const allOption = document.createElement("option");
+    allOption.value = "all";
+    allOption.text = "All";
+    monthFilter.appendChild(allOption);
+
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(new Date().getFullYear(), i);
+      const option = document.createElement("option");
+      option.value = i;
+      option.text = date.toLocaleString('default', { month: 'long' });
+      if (i === new Date().getMonth()) option.selected = true;
+      monthFilter.appendChild(option);
+    }
+  }
+
+  function getFilteredTransactions() {
+    if (monthFilter.value === "all") return transactions;
+    return transactions.filter(t => {
+      const date = new Date(t.date);
+      return date.getMonth() === parseInt(monthFilter.value);
+    });
+  }
+
+  function updateTransactions() {
+    transactionList.innerHTML = '';
+    let income = 0, expenses = 0;
+    const filtered = getFilteredTransactions();
+
+    filtered.forEach((t, index) => {
+      const li = document.createElement('li');
+      li.className = 'transaction ' + t.type;
+      li.innerHTML = `${t.description} <strong>${t.type === 'expense' ? '-' : '+'}$${t.amount}</strong> <button onclick="deleteTransaction(${index})">x</button>`;
+      transactionList.appendChild(li);
+
+      if (t.type === 'income') income += t.amount;
+      else expenses += t.amount;
+    });
+
+    totalIncome.textContent = `$${income}`;
+    totalExpenses.textContent = `$${expenses}`;
+    balance.textContent = `$${income - expenses}`;
+    updateChart(income, expenses);
+    localStorage.setItem('transactions', JSON.stringify(transactions));
+  }
+
+  window.deleteTransaction = function(index) {
+    const filtered = getFilteredTransactions();
+    const target = filtered[index];
+    const actualIndex = transactions.findIndex(t =>
+      t.description === target.description &&
+      t.amount === target.amount &&
+      t.type === target.type &&
+      t.date === target.date
+    );
+    if (actualIndex !== -1) {
+      transactions.splice(actualIndex, 1);
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+    updateTransactions();
+  }
+
+  function addTransaction() {
+    const desc = descriptionInput.value.trim();
+    const amt = parseFloat(amountInput.value);
+    const type = typeInput.value;
+    if (!desc || isNaN(amt) || amt <= 0) return alert('Enter valid description and amount');
+    const now = new Date();
+    transactions.push({ description: desc, amount: amt, type, date: now.toISOString() });
+    descriptionInput.value = '';
+    amountInput.value = '';
+    updateTransactions();
+  }
+
+  function exportToCSV() {
+    const rows = [["Description", "Amount", "Type", "Date"]];
+    getFilteredTransactions().forEach(t => {
+      rows.push([t.description, t.amount, t.type, t.date]);
+    });
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "transactions.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function updateChart(income, expenses) {
+    const ctx = document.getElementById('chart').getContext('2d');
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Income', 'Expenses'],
+        datasets: [{
+          data: [income, expenses],
+          backgroundColor: ['#2ecc71', '#e74c3c'],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom' }
+        }
+      }
+    });
+  }
+
+  populateMonthFilter();
+  updateTransactions();
+  addBtn.addEventListener("click", addTransaction);
+  monthFilter.addEventListener("change", updateTransactions);
+  exportBtn.addEventListener("click", exportToCSV);
+  darkModeToggle.addEventListener("click", () => {
+    document.body.classList.toggle("dark");
+  });
+});
+</script>
+</body>
+</html>
