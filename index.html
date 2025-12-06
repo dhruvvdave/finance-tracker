@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>💰 Finance Tracker Pro</title>
+  <title>Finance Tracker Pro 💰</title>
   <style>
 :root {
   --primary-color: #6366f1;
@@ -823,6 +823,18 @@ canvas {
 .mt-2 { margin-top: 1rem; }
 .mb-1 { margin-bottom: 0.5rem; }
 .mb-2 { margin-bottom: 1rem; }
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1186,9 +1198,19 @@ document.addEventListener("DOMContentLoaded", () => {
     return filtered;
   }
 
-  // Animate number
+  // Animate number with reduced motion support
   function animateValue(element, start, end, duration = 1000) {
     if (!element) return;
+    
+    // Check if user prefers reduced motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    
+    if (prefersReducedMotion) {
+      // Skip animation, just set the final value
+      element.textContent = '$' + Math.abs(end).toFixed(2);
+      return;
+    }
+    
     const range = end - start;
     const increment = range / (duration / 16);
     let current = start;
@@ -1207,16 +1229,27 @@ document.addEventListener("DOMContentLoaded", () => {
   function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
     toast.innerHTML = `
       <span>${type === 'success' ? '✅' : '❌'}</span>
       <span>${message}</span>
     `;
     document.body.appendChild(toast);
     
-    setTimeout(() => {
+    const removeToast = () => {
       toast.style.animation = 'slideInRight 0.3s ease reverse';
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 300);
+    };
+    
+    const timeoutId = setTimeout(removeToast, 3000);
+    
+    // Store cleanup function
+    toast.dataset.timeoutId = timeoutId;
   }
 
   // Update statistics
@@ -1398,16 +1431,26 @@ document.addEventListener("DOMContentLoaded", () => {
     const date = transactionDateInput.value ? new Date(transactionDateInput.value) : new Date();
 
     if (!desc) {
-      showToast('Please enter a description', 'error');
+      const errorMsg = 'Please enter a description';
+      showToast(errorMsg, 'error');
       descriptionInput.focus();
+      descriptionInput.setAttribute('aria-invalid', 'true');
+      descriptionInput.setAttribute('aria-describedby', 'desc-error');
       return;
     }
+    descriptionInput.setAttribute('aria-invalid', 'false');
+    descriptionInput.removeAttribute('aria-describedby');
     
     if (isNaN(amt) || amt <= 0) {
-      showToast('Please enter a valid amount', 'error');
+      const errorMsg = 'Please enter a valid amount';
+      showToast(errorMsg, 'error');
       amountInput.focus();
+      amountInput.setAttribute('aria-invalid', 'true');
+      amountInput.setAttribute('aria-describedby', 'amount-error');
       return;
     }
+    amountInput.setAttribute('aria-invalid', 'false');
+    amountInput.removeAttribute('aria-describedby');
 
     transactions.push({ 
       description: desc, 
