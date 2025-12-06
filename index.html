@@ -1065,6 +1065,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const itemsPerPage = 10;
   let deleteTargetIndex = -1;
   let charts = {};
+  
+  // Track current summary values for smooth animations
+  let currentSummaryValues = {
+    income: 0,
+    expenses: 0,
+    balance: 0
+  };
 
   // Get DOM elements
   const descriptionInput = document.getElementById('description');
@@ -1198,9 +1205,18 @@ document.addEventListener("DOMContentLoaded", () => {
     return filtered;
   }
 
+  // Store active animations to prevent conflicts
+  const activeAnimations = new Map();
+  
   // Animate number with reduced motion support
   function animateValue(element, start, end, duration = 1000) {
     if (!element) return;
+    
+    // Clear any existing animation for this element
+    if (activeAnimations.has(element)) {
+      clearInterval(activeAnimations.get(element));
+      activeAnimations.delete(element);
+    }
     
     // Check if user prefers reduced motion
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1220,9 +1236,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
         current = end;
         clearInterval(timer);
+        activeAnimations.delete(element);
       }
       element.textContent = '$' + Math.abs(current).toFixed(2);
     }, 16);
+    
+    // Store the timer reference
+    activeAnimations.set(element, timer);
   }
 
   // Show toast notification
@@ -1290,10 +1310,15 @@ document.addEventListener("DOMContentLoaded", () => {
       else expenses += t.amount;
     });
 
-    // Animate values
-    animateValue(totalIncome, 0, income);
-    animateValue(totalExpenses, 0, expenses);
-    animateValue(balance, 0, income - expenses);
+    // Animate values from current to new values
+    animateValue(totalIncome, currentSummaryValues.income, income);
+    animateValue(totalExpenses, currentSummaryValues.expenses, expenses);
+    animateValue(balance, currentSummaryValues.balance, income - expenses);
+    
+    // Update current values for next animation
+    currentSummaryValues.income = income;
+    currentSummaryValues.expenses = expenses;
+    currentSummaryValues.balance = income - expenses;
 
     // Update transaction list with pagination
     const startIndex = (currentPage - 1) * itemsPerPage;
